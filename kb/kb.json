@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "site": "https://www.obec-radim.cz",
+  "entries": [
+    {
+      "id": "kontakty",
+      "title": "Kontakty a adresa obce Radim",
+      "url": "https://www.obec-radim.cz/",
+      "answer": "Obec Radim, Radim 8, 507 12 Radim. Datová schránka: szfj9sk. Tel.: +420 731 409 498, +420 725 867 505. E-maily: urad@obec-radim.cz, ucetni@obec-radim.cz, zpravodaj@obec-radim.cz. Č.ú.: 5503257329/0800.",
+      "keywords": ["kontakt", "kontakty", "telefon", "email", "e-mail", "datová schránka", "datovka", "adresa", "radim 8", "účet", "cislo uctu", "číslo účtu"]
+    },
+    {
+      "id": "uredni_hodiny",
+      "title": "Úřední hodiny obecního úřadu Radim",
+      "url": "https://www.obec-radim.cz/urad/",
+      "answer": "Úřední hodiny obecního úřadu Radim: středa 16:00–19:00.",
+      "keywords": ["úřední hodiny", "uredni hodiny", "kdy je otevřeno", "otevřeno", "úřad", "obecní úřad", "kdy je úřad", "kdy na úřad"]
+    },
+    {
+      "id": "uzemni_plan",
+      "title": "Územní a rozvojový plán (územní plán) obce Radim",
+      "url": "https://www.obec-radim.cz/urad/uzemni-a-rozvojovy-plan/",
+      "answer": "Územní plán / územní a rozvojový plán obce Radim najdete na stránce níže.",
+      "keywords": ["územní plán", "uzemni plan", "územní a rozvojový plán", "uzemni", "rozvojovy plan", "regulativy", "výkres", "mapa", "plán"]
+    },
+    {
+      "id": "program_rozvoje",
+      "title": "Program rozvoje obce Radim",
+      "url": "https://www.obec-radim.cz/modules/file_storage/download.php?file=67081de0%7C278",
+      "answer": "Program rozvoje obce Radim je ke stažení zde (PDF).",
+      "keywords": ["program rozvoje", "rozvoj obce", "strategie", "plán rozvoje", "pdf", "program"]
+    }
+  ]
+}
