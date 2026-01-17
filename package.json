@@ -1,13 +1,13 @@
 {
-  "name": "obec-chomutice-ai",
+  "name": "obec-chomutice-chatbot",
   "version": "1.0.0",
-  "description": "AI asistent obce Chomutice – znalostní báze + pravidelný web scrape",
+  "description": "Live scraping + knowledge base for Obec Chomutice",
   "type": "module",
   "scripts": {
-    "scrape": "node scripts/scrape-chomutice.mjs"
+    "scrape": "node scripts/scrape-chomutice.js"
   },
   "dependencies": {
-    "openai": "^4.0.0",
+    "node-fetch": "^3.3.2",
     "cheerio": "^1.0.0-rc.12"
   }
 }
