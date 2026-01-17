@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Asistent obce Radim</title>
+<title>Asistent obce Chomutice</title>
 
 <style>
 :root{
@@ -130,7 +130,7 @@ body{
 .msg a{color:var(--brand2);word-break:break-word;text-decoration:none}
 .msg a:hover{text-decoration:underline}
 
-/* ===== Quick buttons (MENŠÍ, bez šedé plochy) ===== */
+/* ===== Quick buttons ===== */
 .quickbar{
   margin:6px 12px 8px 12px;
   display:flex;
@@ -150,7 +150,7 @@ body{
 }
 .quickbar .qb:hover{ background: rgba(29,78,216,.38); }
 
-/* ===== LOADING BAR (Generuje se odpověď… + 3 tečky) ===== */
+/* ===== LOADING BAR ===== */
 .loading-bar{
   display:flex;
   align-items:center;
@@ -269,12 +269,12 @@ button.send:disabled{opacity:.55;cursor:not-allowed}
 </div>
 
 <!-- CHAT -->
-<div id="widget" class="chat-widget" role="dialog" aria-label="Chat – Asistent obce Radim">
+<div id="widget" class="chat-widget" role="dialog" aria-label="Chat – Asistent obce Chomutice">
   <div class="chat-header" onclick="closeChat()">
     <div class="header-left">
       <div class="brandmark" id="brandmark"><span id="brandFallback" style="font-size:16px;font-weight:900;">AI</span></div>
       <div style="min-width:0;">
-        <div class="header-title">Asistent obce Radim</div>
+        <div class="header-title">Asistent obce Chomutice</div>
       </div>
     </div>
     <div class="header-right">
@@ -285,15 +285,15 @@ button.send:disabled{opacity:.55;cursor:not-allowed}
 
   <div id="chat" class="chat"></div>
 
-  <!-- Quick buttons (jen to, co chceš) -->
+  <!-- Quick buttons -->
   <div class="quickbar" id="quickbar">
-    <button class="qb" type="button" data-q="Bioodpad – kam s ním v Radimi?">Bioodpad</button>
-    <button class="qb" type="button" data-q="Jaké je číslo na starostku?">Číslo na starostku</button>
-    <button class="qb" type="button" data-q="Kde najdu kontakty na obecní úřad?">Kontakty úřadu</button>
-    <button class="qb" type="button" data-q="Jaké jsou úřední hodiny obecního úřadu?">Úřední hodiny</button>
+    <button class="qb" type="button" data-q="Jaké jsou úřední hodiny obecního úřadu Chomutice?">Úřední hodiny</button>
+    <button class="qb" type="button" data-q="Kde najdu kontakty na obecní úřad Chomutice?">Kontakty úřadu</button>
+    <button class="qb" type="button" data-q="Jak funguje hlášení rozhlasu v obci Chomutice?">Hlášení rozhlasu</button>
+    <button class="qb" type="button" data-q="Kde najdu kalendář akcí v obci Chomutice?">Kalendář akcí</button>
   </div>
 
-  <!-- Loading (VRÁCENO) -->
+  <!-- Loading -->
   <div id="loadingBar" class="loading-bar" hidden>
     <span class="typing" aria-label="Generuje se odpověď">
       <span></span><span></span><span></span>
@@ -331,9 +331,9 @@ const fabIcon = document.getElementById("fabIcon");
 const fabFallback = document.getElementById("fabFallback");
 const quickbar = document.getElementById("quickbar");
 
-// --- Assets
-const BG_URL = "/skins/radim/bg.jpg";
-const ERB_URL = "/skins/radim/erb.png";
+// --- Assets (CHOMUTICE)
+const BG_URL = "/skins/chomutice/bg.jpg";
+const ERB_URL = "/skins/chomutice/erb.png";
 
 function openChat(){
   widget.style.display="flex";
@@ -383,9 +383,9 @@ async function ask(qOverride){
       body:JSON.stringify({ message:q })
     });
     const j=await r.json().catch(()=>({}));
-    addMessage("Radim", (j && j.answer) ? j.answer : "Bez odpovědi", "bot");
+    addMessage("Chomutice", (j && j.answer) ? j.answer : "Bez odpovědi", "bot");
   }catch(e){
-    addMessage("Radim","Chyba spojení.","bot");
+    addMessage("Chomutice","Chyba spojení.","bot");
   }finally{
     showLoading(false);
     send.disabled=false;
@@ -415,12 +415,12 @@ quickbar.addEventListener("click",(e)=>{
   img.onload = () => {
     brandmark.innerHTML = "";
     const h = document.createElement("img");
-    h.src = ERB_URL; h.alt = "Erb obce Radim";
+    h.src = ERB_URL; h.alt = "Erb obce Chomutice";
     brandmark.appendChild(h);
 
     fabIcon.innerHTML = "";
     const f = document.createElement("img");
-    f.src = ERB_URL; f.alt = "Erb obce Radim";
+    f.src = ERB_URL; f.alt = "Erb obce Chomutice";
     fabIcon.appendChild(f);
   };
   img.onerror = () => {
@@ -432,11 +432,11 @@ quickbar.addEventListener("click",(e)=>{
 
 // INIT
 addMessage(
-  "Radim",
-  "Upozornění:\nOdpovědi tohoto asistenta jsou generovány umělou inteligencí na základě dostupných informací.\nPrávně závazné a oficiální informace si vždy ověřte na oficiálním webu obce Radim nebo přímo na obecním úřadě.",
+  "Chomutice",
+  "Upozornění:\nOdpovědi tohoto asistenta jsou generovány umělou inteligencí na základě dostupných informací.\nPrávně závazné a oficiální informace si vždy ověřte na oficiálním webu obce Chomutice nebo přímo na obecním úřadě.",
   "bot"
 );
-addMessage("Radim","Ahoj! Zeptej se mě na cokoliv ohledně obce Radim.","bot");
+addMessage("Chomutice","Ahoj! Zeptej se mě na cokoliv ohledně obce Chomutice.","bot");
 </script>
 
 </body>
