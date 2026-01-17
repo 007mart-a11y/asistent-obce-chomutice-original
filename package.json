@@ -1,8 +1,13 @@
 {
-  "name": "radim-chatbot",
+  "name": "obec-chomutice-ai",
   "version": "1.0.0",
+  "description": "AI asistent obce Chomutice – znalostní báze + pravidelný web scrape",
   "type": "module",
+  "scripts": {
+    "scrape": "node scripts/scrape-chomutice.mjs"
+  },
   "dependencies": {
-    "openai": "^4.0.0"
+    "openai": "^4.0.0",
+    "cheerio": "^1.0.0-rc.12"
   }
 }
