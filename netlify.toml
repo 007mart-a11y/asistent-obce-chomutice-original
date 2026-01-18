@@ -1,6 +1,6 @@
 [build]
-  publish = "."
-  functions = "netlify/functions"
+  command = "npm run scrape"
+  publish = "public"
 
 [functions]
-  node_bundler = "esbuild"
+  directory = "netlify/functions"
