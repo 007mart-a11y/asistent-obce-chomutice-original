@@ -1,6 +1,21 @@
 // netlify/functions/search.mjs
-// Netlify Functions (Node 18+), bez openai SDK – jen fetch
-// Env vars: OPENAI_API_KEY, ASSISTANT_ID
+// Netlify Functions (Node 18+, ESM)
+// Requires: npm i openai
+//
+// DULEZITE:
+// Aby tohle umelo cist soubory z /public/knowledge na produkci,
+// musi byt v netlify.toml v [functions] included_files = ["public/**"]
+//
+// Ocekavany request body:
+// { "message": "..." , "thread_id": "thread_..."? }
+//
+// Response:
+// { ok:true, answer, thread_id }  nebo { ok:false, error, details? }
+
+import OpenAI from "openai";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,63 +23,31 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
 
-const OPENAI_BASE = "https://api.openai.com/v1";
-const POLL_INTERVAL_MS = 800;
-const TIMEOUT_MS = 25_000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-function json(resBody, status = 200) {
-  return new Response(JSON.stringify(resBody), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+// Zkusime par bezpecnych lokaci, kde by mohl byt repozitar pri buildu/runtime
+function candidatePaths(rel) {
+  const relNorm = rel.replace(/^[\\/]+/, "");
+  return [
+    path.join(process.cwd(), relNorm),
+    path.join(__dirname, "..", "..", relNorm), // netlify/functions/ -> root
+  ];
 }
 
-async function sleep(ms) {
-  await new Promise((r) => setTimeout(r, ms));
-}
-
-async function openaiFetch(apiKey, path, { method = "GET", body } = {}) {
-  const res = await fetch(`${OPENAI_BASE}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      // Assistants v2 header (důležité)
-      "OpenAI-Beta": "assistants=v2",
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const text = await res.text();
-  let data;
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
+async function readTextIfExists(relPath) {
+  for (const p of candidatePaths(relPath)) {
+    try {
+      const txt = await fs.readFile(p, "utf8");
+      return { ok: true, path: p, text: txt };
+    } catch (_) {}
   }
-
-  if (!res.ok) {
-    const msg =
-      data?.error?.message ||
-      data?.message ||
-      `OpenAI error ${res.status} on ${path}`;
-    const details = data?.error || data;
-    throw new Error(`${msg} :: ${JSON.stringify(details).slice(0, 600)}`);
-  }
-
-  return data;
+  return { ok: false, path: null, text: "" };
 }
 
-function extractAssistantText(messagesList) {
-  // messagesList = { data: [ ... ] }
-  const msg = (messagesList?.data || []).find((m) => m.role === "assistant");
-  if (!msg?.content?.length) return "Bez odpovědi";
-
-  const parts = msg.content
-    .map((c) => (c?.type === "text" ? c.text?.value : ""))
-    .filter(Boolean);
-
-  return parts.length ? parts.join("\n\n") : "Bez odpovědi";
+function stripCitations(s) {
+  // odstrani „“ apod.
+  return String(s || "").replace(/【\d+:\d+†[^】]+】/g, "").trim();
 }
 
 export default async function handler(req) {
@@ -75,75 +58,159 @@ export default async function handler(req) {
 
   try {
     if (req.method !== "POST") {
-      return json({ ok: false, error: "Method not allowed" }, 405);
+      return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     const assistantId = process.env.ASSISTANT_ID;
 
-    if (!apiKey) return json({ ok: false, error: "Missing OPENAI_API_KEY" }, 500);
-    if (!assistantId) return json({ ok: false, error: "Missing ASSISTANT_ID" }, 500);
+    if (!apiKey) {
+      return new Response(JSON.stringify({ ok: false, error: "Missing OPENAI_API_KEY" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!assistantId) {
+      return new Response(JSON.stringify({ ok: false, error: "Missing ASSISTANT_ID" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const body = await req.json().catch(() => ({}));
     const message = body?.message;
 
     if (!message || typeof message !== "string") {
-      return json({ ok: false, error: "Missing message" }, 400);
+      return new Response(JSON.stringify({ ok: false, error: "Missing message" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // (volitelné) thread_id z frontendu – když není, vytvoříme nový
-    let threadId = body?.thread_id && typeof body.thread_id === "string" ? body.thread_id : null;
+    // 1) Nacti CORE + LIVE data z /public/knowledge (pokud existuji)
+    const core = await readTextIfExists("public/knowledge/00_CORE_obec_chomutice.txt");
+    const live = await readTextIfExists("public/knowledge/10_LIVE_obec_chomutice.txt");
+
+    // 2) Sestav kontext (CORE ma prioritu)
+    const contextParts = [];
+    if (core.ok && core.text.trim()) {
+      contextParts.push(`=== 00_CORE (primarni overene info, ma prednost) ===\n${core.text.trim()}`);
+    }
+    if (live.ok && live.text.trim()) {
+      contextParts.push(`=== 10_LIVE (aktuality, rozhlas, kalendar – pravidelne generovane) ===\n${live.text.trim()}`);
+    }
+
+    const contextText = contextParts.length
+      ? contextParts.join("\n\n")
+      : "(Zadne lokalni knowledge soubory se nepodarilo nacist.)";
+
+    const client = new OpenAI({ apiKey });
+
+    // 3) Thread: bud pokracuj, nebo vytvor novy
+    let threadId = typeof body.thread_id === "string" && body.thread_id.startsWith("thread_")
+      ? body.thread_id
+      : null;
 
     if (!threadId) {
-      const thread = await openaiFetch(apiKey, "/threads", { method: "POST", body: {} });
+      const thread = await client.beta.threads.create();
       threadId = thread.id;
+
+      // System instrukce + knowledge (vlozime jen pri zalozeni threadu)
+      await client.beta.threads.messages.create(threadId, {
+        role: "system",
+        content:
+`Jsi „Asistent obce Chomutice“.
+Odpovidej cesky, vecne a kratce.
+Pouzivej POUZE informace z prilozenych podkladu (CORE a LIVE).
+- Kdyz je konflikt: vyhrava 00_CORE.
+- Kdyz odpoved v podkladech neni: rekni to narovinu a doporuc overeni na oficialnim webu obce.
+- Nevymyslej si.
+
+${contextText}`,
+      });
     }
 
-    // přidej user zprávu do threadu
-    await openaiFetch(apiKey, `/threads/${threadId}/messages`, {
-      method: "POST",
-      body: { role: "user", content: message },
+    // 4) Uzivatelova zprava
+    await client.beta.threads.messages.create(threadId, {
+      role: "user",
+      content: message,
     });
 
-    // spusť run
-    const run = await openaiFetch(apiKey, `/threads/${threadId}/runs`, {
-      method: "POST",
-      body: { assistant_id: assistantId },
+    // 5) Run
+    const run = await client.beta.threads.runs.create(threadId, {
+      assistant_id: assistantId,
     });
 
+    // 6) Polling + timeout
     const started = Date.now();
-    let status = run.status;
+    const timeoutMs = 30_000;
+    let status = "queued";
 
-    while (status === "queued" || status === "in_progress") {
-      if (Date.now() - started > TIMEOUT_MS) {
-        return json({ ok: false, error: "Timeout waiting for response" }, 504);
+    while (true) {
+      if (Date.now() - started > timeoutMs) {
+        return new Response(JSON.stringify({ ok: false, error: "Timeout waiting for response" }), {
+          status: 504,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      await sleep(POLL_INTERVAL_MS);
-      const check = await openaiFetch(apiKey, `/threads/${threadId}/runs/${run.id}`);
+
+      await new Promise((r) => setTimeout(r, 800));
+      const check = await client.beta.threads.runs.retrieve(threadId, run.id);
       status = check.status;
 
+      if (status === "queued" || status === "in_progress") continue;
+
       if (status === "requires_action") {
-        // pokud by někdy chtěl tool call mimo standard (neřešíme tady)
-        return json(
-          { ok: false, error: "Run requires action (tool call not handled).", status },
-          501
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: "Run requires action (tool call not handled in function).",
+            status,
+          }),
+          { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      break;
     }
 
     if (status !== "completed") {
-      return json({ ok: false, error: "Run failed", status }, 500);
+      return new Response(JSON.stringify({ ok: false, error: "Run failed", status }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // načti messages a vyber poslední assistant odpověď
-    const messages = await openaiFetch(apiKey, `/threads/${threadId}/messages?limit=20`);
-    const answer = extractAssistantText(messages);
+    // 7) Vytahni posledni assistant odpoved
+    const messages = await client.beta.threads.messages.list(threadId, { limit: 20 });
 
-    return json({ ok: true, answer, thread_id: threadId }, 200);
+    const assistantMsg = messages.data.find((m) => m.role === "assistant");
+
+    let answerText = "Bez odpovědi";
+    if (assistantMsg?.content?.length) {
+      const parts = assistantMsg.content
+        .map((c) => (c?.type === "text" ? c.text?.value : ""))
+        .filter(Boolean);
+      if (parts.length) answerText = parts.join("\n\n");
+    }
+
+    answerText = stripCitations(answerText);
+
+    return new Response(JSON.stringify({ ok: true, answer: answerText, thread_id: threadId }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (err) {
-    return json(
-      { ok: false, error: "Server error", details: err?.message || String(err) },
-      500
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: "Server error",
+        details: err?.message || String(err),
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }

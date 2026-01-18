@@ -1,10 +1,11 @@
 OBEC CHOMUTICE – LIVE DATA
-Vygenerováno: 2026-01-18T22:01:05.165Z
+Vygenerováno: 2026-01-18T21:07:23.361Z
 Zdroj: https://www.obec-chomutice.cz
 
 ⚠️ POZNÁMKA:
 - Automaticky generovaný obsah (pravidelný update).
 - Při rozporu má přednost soubor 00_CORE (primární ověřené informace).
+- U položek uvádím odkaz na oficiální stránku obce.
 
 ────────────────────────────────────────────
 
@@ -15,6 +16,7 @@ Zdroj: https://www.obec-chomutice.cz
 
 === AKTUALITY ===
 URL: https://www.obec-chomutice.cz/aktuality-1/
+Stránek: 4
 Počet položek: 20
 
 - Pozvánky MěÚ Hořice (16. 1. 2026)
@@ -95,7 +97,7 @@ URL: https://www.obec-chomutice.cz/kalendar-akci/
 Počet položek: 4
 
 - Kavárnička
-  - Popis: pondělí 26. ledna 2026 od 16:30 hodin v senior klubu na kytaru zahraje a k tomu zazpívá paní Dana :-) celý text
+  - Popis: pondělí 26. ledna 2026 od 16:30 hodin v senior klubu na kytaru zahraje a k tomu zazpívá paní Dana:-) celý text
   - Odkaz: https://www.obec-chomutice.cz/kalendar-akci/kavarnicka-844_114cs.html
 - Karneval
   - Popis: sobota 14. února 2026 od 14:30 hodin v tělocvičně základní školy celý text
