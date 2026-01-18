@@ -1,10 +1,71 @@
-import OpenAI from "openai";
+// netlify/functions/search.mjs
+// Netlify Functions (Node 18+), bez openai SDK – jen fetch
+// Env vars: OPENAI_API_KEY, ASSISTANT_ID
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "content-type",
   "Access-Control-Allow-Methods": "POST,OPTIONS",
 };
+
+const OPENAI_BASE = "https://api.openai.com/v1";
+const POLL_INTERVAL_MS = 800;
+const TIMEOUT_MS = 25_000;
+
+function json(resBody, status = 200) {
+  return new Response(JSON.stringify(resBody), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+async function sleep(ms) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function openaiFetch(apiKey, path, { method = "GET", body } = {}) {
+  const res = await fetch(`${OPENAI_BASE}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      // Assistants v2 header (důležité)
+      "OpenAI-Beta": "assistants=v2",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    const msg =
+      data?.error?.message ||
+      data?.message ||
+      `OpenAI error ${res.status} on ${path}`;
+    const details = data?.error || data;
+    throw new Error(`${msg} :: ${JSON.stringify(details).slice(0, 600)}`);
+  }
+
+  return data;
+}
+
+function extractAssistantText(messagesList) {
+  // messagesList = { data: [ ... ] }
+  const msg = (messagesList?.data || []).find((m) => m.role === "assistant");
+  if (!msg?.content?.length) return "Bez odpovědi";
+
+  const parts = msg.content
+    .map((c) => (c?.type === "text" ? c.text?.value : ""))
+    .filter(Boolean);
+
+  return parts.length ? parts.join("\n\n") : "Bez odpovědi";
+}
 
 export default async function handler(req) {
   // CORS preflight
@@ -14,116 +75,75 @@ export default async function handler(req) {
 
   try {
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ ok: false, error: "Method not allowed" }), {
-        status: 405,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ ok: false, error: "Method not allowed" }, 405);
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     const assistantId = process.env.ASSISTANT_ID;
 
-    if (!apiKey) {
-      return new Response(JSON.stringify({ ok: false, error: "Missing OPENAI_API_KEY" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    if (!assistantId) {
-      return new Response(JSON.stringify({ ok: false, error: "Missing ASSISTANT_ID" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (!apiKey) return json({ ok: false, error: "Missing OPENAI_API_KEY" }, 500);
+    if (!assistantId) return json({ ok: false, error: "Missing ASSISTANT_ID" }, 500);
 
     const body = await req.json().catch(() => ({}));
-    if (!body.message || typeof body.message !== "string") {
-      return new Response(JSON.stringify({ ok: false, error: "Missing message" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const message = body?.message;
+
+    if (!message || typeof message !== "string") {
+      return json({ ok: false, error: "Missing message" }, 400);
     }
 
-    const client = new OpenAI({ apiKey });
+    // (volitelné) thread_id z frontendu – když není, vytvoříme nový
+    let threadId = body?.thread_id && typeof body.thread_id === "string" ? body.thread_id : null;
 
-    const thread = await client.beta.threads.create();
+    if (!threadId) {
+      const thread = await openaiFetch(apiKey, "/threads", { method: "POST", body: {} });
+      threadId = thread.id;
+    }
 
-    await client.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: body.message,
+    // přidej user zprávu do threadu
+    await openaiFetch(apiKey, `/threads/${threadId}/messages`, {
+      method: "POST",
+      body: { role: "user", content: message },
     });
 
-    const run = await client.beta.threads.runs.create(thread.id, {
-      assistant_id: assistantId,
+    // spusť run
+    const run = await openaiFetch(apiKey, `/threads/${threadId}/runs`, {
+      method: "POST",
+      body: { assistant_id: assistantId },
     });
 
-    // čekání na dokončení + timeout
     const started = Date.now();
-    const timeoutMs = 25_000;
+    let status = run.status;
 
-    let status = "queued";
-    while (true) {
-      if (Date.now() - started > timeoutMs) {
-        return new Response(JSON.stringify({ ok: false, error: "Timeout waiting for response" }), {
-          status: 504,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    while (status === "queued" || status === "in_progress") {
+      if (Date.now() - started > TIMEOUT_MS) {
+        return json({ ok: false, error: "Timeout waiting for response" }, 504);
       }
-
-      await new Promise((r) => setTimeout(r, 800));
-      const check = await client.beta.threads.runs.retrieve(thread.id, run.id);
+      await sleep(POLL_INTERVAL_MS);
+      const check = await openaiFetch(apiKey, `/threads/${threadId}/runs/${run.id}`);
       status = check.status;
 
-      if (status === "queued" || status === "in_progress") continue;
-
-      // kdyby assistant chtěl tool-call mimo File Search, radši to vrať jako řízenou chybu
       if (status === "requires_action") {
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            error: "Run requires action (tool call not handled in function).",
-            status,
-          }),
-          { status: 501, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        // pokud by někdy chtěl tool call mimo standard (neřešíme tady)
+        return json(
+          { ok: false, error: "Run requires action (tool call not handled).", status },
+          501
         );
       }
-
-      break;
     }
 
     if (status !== "completed") {
-      return new Response(JSON.stringify({ ok: false, error: "Run failed", status }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return json({ ok: false, error: "Run failed", status }, 500);
     }
 
-    const messages = await client.beta.threads.messages.list(thread.id, { limit: 20 });
+    // načti messages a vyber poslední assistant odpověď
+    const messages = await openaiFetch(apiKey, `/threads/${threadId}/messages?limit=20`);
+    const answer = extractAssistantText(messages);
 
-    // vezmi nejnovější assistant zprávu
-    const assistantMsg = messages.data.find((m) => m.role === "assistant");
-
-    // robustní čtení textu (někdy je víc částí)
-    let answerText = "Bez odpovědi";
-    if (assistantMsg?.content?.length) {
-      const parts = assistantMsg.content
-        .map((c) => (c?.type === "text" ? c.text?.value : ""))
-        .filter(Boolean);
-      if (parts.length) answerText = parts.join("\n\n");
-    }
-
-    return new Response(JSON.stringify({ ok: true, answer: answerText }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return json({ ok: true, answer, thread_id: threadId }, 200);
   } catch (err) {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: "Server error",
-        details: err?.message || String(err),
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    return json(
+      { ok: false, error: "Server error", details: err?.message || String(err) },
+      500
     );
   }
 }
