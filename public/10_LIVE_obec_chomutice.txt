@@ -1,0 +1,110 @@
+OBEC CHOMUTICE – LIVE DATA
+Vygenerováno: 2026-01-18T21:07:23.361Z
+Zdroj: https://www.obec-chomutice.cz
+
+⚠️ POZNÁMKA:
+- Automaticky generovaný obsah (pravidelný update).
+- Při rozporu má přednost soubor 00_CORE (primární ověřené informace).
+- U položek uvádím odkaz na oficiální stránku obce.
+
+────────────────────────────────────────────
+
+=== PROVOZNÍ UPOZORNĚNÍ / HOMEPAGE ===
+- Od 22. 12. 2025 do 2. 1. 2026 bude obecní úřad uzavřen.
+
+────────────────────────────────────────────
+
+=== AKTUALITY ===
+URL: https://www.obec-chomutice.cz/aktuality-1/
+Stránek: 4
+Počet položek: 20
+
+- Pozvánky MěÚ Hořice (16. 1. 2026)
+  - Popis: na setkání svépomocné skupiny pro pečující seniory na setkání osob pečujících o osoby se zdravotním postižením nebo duševním onemocněním celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/pozvanky-meu-horice-840cs.html
+- Večerní bruslení (5. 1. 2026)
+  - Popis: středa 7. ledna od 16:30 do 18:30 hodin na požární nádrži celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/vecerni-brusleni-839cs.html
+- ztráta a nález zvířete (5. 1. 2026)
+  - Popis: info celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/ztrata-a-nalez-zvirete-838cs.html
+- Novoroční ohňostroj (22. 12. 2025)
+  - Popis: 1. ledna 2026 sraz v 17 hodin na hokejovém hřišti TJ celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/novorocni-ohnostroj-837cs.html
+- Prodej ryb 2025 (19. 12. 2025)
+  - Popis: Vysoké Veselí 22. 12. 2025 v době 9 až 15 hodin 23. 12. 2025 v době 9 až 12 hodin celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/prodej-ryb-2025-836cs.html
+- Kůsovic koledníci (20. 11. 2025)
+  - Popis: neděle 30. 11. od 15 hodin kaple v domově pro seniory v Oboře celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/kusovic-kolednici-835cs.html
+- Mikuláš (18. 11. 2025)
+  - Popis: pátek 5. 12. celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/mikulas-833cs.html
+- Rozsvícení stromečku (10. 11. 2025)
+  - Popis: sobota 22. 11. 2025 od 16 hodin prodejní výstava na OÚ od 16 hodin výstava betlémů na OÚ prodej občerstvení a dalších věcí od 16:30 vystoupení ZŠ a MŠ Chomutice prodej živých ryb celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/rozsviceni-stromecku-832cs.html
+- Koncert - Roráty (10. 11. 2025)
+  - Popis: pátek 12. 12. od 18.18 hodin v kostele sv. Diviše soubor Barunka z Ratibořic celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/koncert-roraty-831cs.html
+- Přednáška (6. 11. 2025)
+  - Popis: 13. 11. 2025 od 16:30 hodin celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/prednaska-830cs.html
+- koncert BONAVITA (6. 11. 2025)
+  - Popis: 6. 12. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/koncert-bonavita-829cs.html
+- večer s harmonikou (24. 10. 2025)
+  - Popis: sobota 1. 11. 2025 harmonikářka Lucie Doušová od 18 hodin v Senior klubu Možnost zakoupení občerstvení celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/vecer-s-harmonikou-828cs.html
+- Divadelní představení (15. 10. 2025)
+  - Popis: 7. 11. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/divadelni-predstaveni-827cs.html
+- Svoz velkoobjemného a nebezpečného odpadu (8. 10. 2025)
+  - Popis: svoz se uskuteční ve čtvrtek 23. 10. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/svoz-velkoobjemneho-a-nebezpecneho-odpadu-826cs.html
+- Běh tří řek 2025 (19. 9. 2025)
+  - Popis: neděle 28. 9. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/beh-tri-rek-2025-825cs.html
+- Výlet do Kladrub a Slatiňan (18. 9. 2025)
+  - Popis: sobota 25. 10. 2025 Přihlášky na OÚ celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/vylet-do-kladrub-a-slatinan-824cs.html
+- Pochod za strašidly (18. 9. 2025)
+  - Popis: pátek 31. 10. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/pochod-za-strasidly-823cs.html
+- Drakiáda (18. 9. 2025)
+  - Popis: sobota 11. 10. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/drakiada-822cs.html
+- Výlet do Jičína (18. 9. 2025)
+  - Popis: 30. září 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/vylet-do-jicina-821cs.html
+- Prodej slepic (21. 8. 2025)
+  - Popis: středa 27. 8. 2025 celý text
+  - Odkaz: https://www.obec-chomutice.cz/aktuality-1/prodej-slepic-819cs.html
+
+────────────────────────────────────────────
+
+=== HLÁŠENÍ ROZHLASU ===
+URL: https://www.obec-chomutice.cz/hlaseni-rozhlasu/
+Počet položek: 1
+
+- Hlášení místního rozhlasu (14. 2. 2025)
+  - Popis: Sjezd rodáků celý text
+  - Odkaz: https://www.obec-chomutice.cz/hlaseni-rozhlasu/hlaseni-mistniho-rozhlasu-764cs.html
+
+────────────────────────────────────────────
+
+=== KALENDÁŘ AKCÍ ===
+URL: https://www.obec-chomutice.cz/kalendar-akci/
+Počet položek: 4
+
+- Kavárnička
+  - Popis: pondělí 26. ledna 2026 od 16:30 hodin v senior klubu na kytaru zahraje a k tomu zazpívá paní Dana:-) celý text
+  - Odkaz: https://www.obec-chomutice.cz/kalendar-akci/kavarnicka-844_114cs.html
+- Karneval
+  - Popis: sobota 14. února 2026 od 14:30 hodin v tělocvičně základní školy celý text
+  - Odkaz: https://www.obec-chomutice.cz/kalendar-akci/karneval-843_113cs.html
+- Přednáška "Albrecht z Valdštejna a evropské hřebčíny
+  - Popis: sobota 28. 2. 2026 od 14 hodin v budově základní školy přednáší Ing. Lenka Gotthardová, CSc celý text
+  - Odkaz: https://www.obec-chomutice.cz/kalendar-akci/prednaska-albrecht-z-valdstejna-a-evropske-hrebciny-841_111cs.html
+- Pohádka a klobouková diskotéka
+  - Popis: sobota 21. března od 14:30 tělocvična základní školy celý text
+  - Odkaz: https://www.obec-chomutice.cz/kalendar-akci/pohadka-a-kloboukova-diskoteka-842_112cs.html
