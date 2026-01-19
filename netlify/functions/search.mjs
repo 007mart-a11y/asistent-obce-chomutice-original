@@ -24,8 +24,6 @@ function jsonResponse(status, data) {
 }
 
 function getCzechTodayString() {
-  // Pro tvůj use-case stačí lokální čas serveru (Netlify běží v UTC, ale důležité je dát konzistentní datum).
-  // Pokud chceš později: udělat TZ explicitně (Europe/Prague) přes Intl (níže).
   const now = new Date();
   const fmt = new Intl.DateTimeFormat("cs-CZ", {
     timeZone: "Europe/Prague",
@@ -77,7 +75,7 @@ function extractAssistantText(messagesListJson) {
 }
 
 function stripCitations(text) {
-  // Odstraní citace typu  které se občas objeví z File Search
+  // Odstraní citace typu 
   return String(text || "").replace(/【\d+:\d+†[^】]+】/g, "").trim();
 }
 
@@ -101,12 +99,13 @@ export default async function handler(req) {
       return jsonResponse(400, { ok: false, error: "Missing message" });
     }
 
-    // ✅ TADY je ta změna: runtime datum / den
+    // ✅ Runtime datum (Europe/Prague) – budeme ho dávat do RUN instructions (správně pro Assistants v2)
     const todayStr = getCzechTodayString();
-    const systemContext =
+    const runInstructions =
       `Dnes je ${todayStr} (časová zóna: Europe/Prague).\n` +
-      `Při výrazech jako "dnes", "zítra", "včera", "příští víkend", "tento týden" apod. ` +
-      `vždy vykládej časové odkazy vzhledem k tomuto datu.`;
+      `Při výrazech jako "dnes", "zítra", "včera", "příští víkend", "tento týden" ` +
+      `vždy vykládej časové odkazy vzhledem k tomuto datu.\n\n` +
+      `Pokud odpovídáš z informací obce, preferuj znalostní bázi (CORE + LIVE ve File Search) a buď konkrétní.`;
 
     // Thread: pokud přijde thread_id, pokračujeme; jinak založíme nový
     let threadId = body?.thread_id;
@@ -116,21 +115,7 @@ export default async function handler(req) {
       threadId = created.id;
     }
 
-    // 1) System message s datem (každý dotaz znova, aby to bylo vždy aktuální)
-    await api(
-      `/threads/${threadId}/messages`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "system",
-          content: systemContext,
-        }),
-      },
-      apiKey
-    );
-
-    // 2) User message
+    // 1) User message (system zprávy do threadu NEPOSÍLAT)
     await api(
       `/threads/${threadId}/messages`,
       {
@@ -144,18 +129,21 @@ export default async function handler(req) {
       apiKey
     );
 
-    // 3) Run
+    // 2) Run + instructions (tady je datum)
     const run = await api(
       `/threads/${threadId}/runs`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistant_id: assistantId }),
+        body: JSON.stringify({
+          assistant_id: assistantId,
+          instructions: runInstructions,
+        }),
       },
       apiKey
     );
 
-    // 4) Poll run status
+    // 3) Poll run status
     const started = Date.now();
     const timeoutMs = 25_000;
 
@@ -186,7 +174,7 @@ export default async function handler(req) {
       break;
     }
 
-    // 5) Read messages
+    // 4) Read messages
     const messages = await api(`/threads/${threadId}/messages?limit=20`, {}, apiKey);
     let answer = extractAssistantText(messages);
     answer = stripCitations(answer);
