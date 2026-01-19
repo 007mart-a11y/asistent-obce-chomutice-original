@@ -348,10 +348,22 @@ function closeChat(){
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g,m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
 }
+
 function linkify(t){
-  const s=escapeHtml(t);
-  return s.replace(/(https?:\/\/[^\s]+)/g,u=>`<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+  // ✅ SAFE LINKIFY FIX: neber koncové .,;:!?) ] } apod. do URL
+  const s = escapeHtml(t);
+  const urlRe = /\bhttps?:\/\/[^\s<>"']+/gi;
+
+  return s.replace(urlRe, (raw) => {
+    // odděl trailing interpunkci (zůstane v textu mimo odkaz)
+    const m = raw.match(/^(.*?)([)\]\}.,;:!?]+)?$/);
+    const url = m && m[1] ? m[1] : raw;
+    const trailing = m && m[2] ? m[2] : "";
+
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trailing}`;
+  });
 }
+
 function addMessage(who,text,cls){
   const d=document.createElement("div");
   d.className="msg "+cls;
