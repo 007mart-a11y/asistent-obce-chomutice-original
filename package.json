@@ -1,12 +1,15 @@
 {
   "name": "obec-chomutice-ai",
   "version": "1.0.0",
-  "description": "AI asistent obce Chomutice – znalostní báze + pravidelný web scrape",
+  "description": "AI asistent obce Chomutice – znalostní báze + pravidelný web scrape + upload do OpenAI",
   "type": "module",
   "scripts": {
-    "scrape": "node scripts/live_chomutice_scrape.mjs"
+    "scrape": "node scripts/live_chomutice_scrape.mjs",
+    "upload": "node scripts/upload-live-to-openai.mjs",
+    "build": "npm run scrape && npm run upload"
   },
   "dependencies": {
-    "cheerio": "^1.1.2"
+    "cheerio": "^1.1.2",
+    "openai": "^4.0.0"
   }
 }
