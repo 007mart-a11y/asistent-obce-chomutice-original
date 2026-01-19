@@ -4,24 +4,32 @@
 // ENV:
 //   OPENAI_API_KEY=...
 //   VECTOR_STORE_ID=vs_...
-// Optional (doporučeno):
-//   ASSISTANT_ID=asst_...
 // Optional:
+//   ASSISTANT_ID=asst_...
 //   LIVE_FILE_PATH=knowledge/10_LIVE_obec_chomutice.txt
 //   CLEANUP_OLD=1
 //   OPENAI_BASE_URL=https://api.openai.com
 
 import fs from "fs";
 import path from "path";
-import FormData from "form-data";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const VECTOR_STORE_ID = process.env.VECTOR_STORE_ID;
-const ASSISTANT_ID = process.env.ASSISTANT_ID;
+const cleanEnv = (v) =>
+  (v || "")
+    .trim()
+    // remove normal quotes + smart quotes around whole value
+    .replace(/^[\s"'“”]+/, "")
+    .replace(/[\s"'“”]+$/, "");
 
-const OPENAI_BASE_URL = (process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/, "");
-const LIVE_FILE_PATH = process.env.LIVE_FILE_PATH || "knowledge/10_LIVE_obec_chomutice.txt";
-const CLEANUP_OLD = process.env.CLEANUP_OLD === "1";
+const OPENAI_API_KEY = cleanEnv(process.env.OPENAI_API_KEY);
+const VECTOR_STORE_ID = cleanEnv(process.env.VECTOR_STORE_ID);
+const ASSISTANT_ID = cleanEnv(process.env.ASSISTANT_ID);
+const OPENAI_BASE_URL = cleanEnv(process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/, "");
+
+const LIVE_FILE_PATH = cleanEnv(process.env.LIVE_FILE_PATH) || "knowledge/10_LIVE_obec_chomutice.txt";
+const CLEANUP_OLD = cleanEnv(process.env.CLEANUP_OLD) === "1";
+
+// Assistants v2 header (nutné pro vector stores/assistants endpoints)
+const BETA_HEADERS = { "OpenAI-Beta": "assistants=v2" };
 
 if (!OPENAI_API_KEY) {
   console.error("❌ Missing env OPENAI_API_KEY");
@@ -32,11 +40,15 @@ if (!VECTOR_STORE_ID) {
   process.exit(1);
 }
 
-// Assistants v2 header (pro endpoints /v1/assistants a /v1/vector_stores)
-const BETA_HEADERS = { "OpenAI-Beta": "assistants=v2" };
-
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function normalizeText(s) {
+  return s
+    .replace(/[“”]/g, '"')
+    .replace(/[’]/g, "'")
+    .replace(/[–]/g, "-");
 }
 
 async function api(pathname, { method = "GET", headers = {}, body } = {}) {
@@ -67,20 +79,22 @@ async function uploadFileToOpenAI(filePath) {
   const abs = path.resolve(process.cwd(), filePath);
   if (!fs.existsSync(abs)) throw new Error(`LIVE file not found: ${abs}`);
 
+  // normalize content to avoid 8220 / smart quotes
+  let content = fs.readFileSync(abs, "utf8");
+  content = normalizeText(content);
+  fs.writeFileSync(abs, content, "utf8");
+
+  const buf = fs.readFileSync(abs);
   const filename = path.basename(abs);
 
-  // ✅ form-data + stream = nejspolehlivější pro Node 18
   const fd = new FormData();
   fd.append("purpose", "assistants");
-  fd.append("file", fs.createReadStream(abs), { filename });
+  fd.append("file", new Blob([buf]), filename);
 
   const res = await fetch(`${OPENAI_BASE_URL}/v1/files`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${OPENAI_API_KEY}`,
-      // form-data si doplní boundary
-      ...fd.getHeaders(),
-      // /v1/files nepotřebuje beta header – ale nevadí ani kdyby byl
     },
     body: fd,
   });
@@ -102,14 +116,9 @@ async function uploadFileToOpenAI(filePath) {
 }
 
 async function ensureAssistantUsesVectorStore(assistantId, vectorStoreId) {
-  if (!assistantId) {
-    console.log("ℹ️ ASSISTANT_ID není nastavený → přeskočeno propojení assistant ↔ vector store.");
-    return;
-  }
-
+  if (!assistantId) return;
   console.log(`🔗 Updating assistant tool_resources: ${assistantId} -> vector_store_ids=[${vectorStoreId}]`);
 
-  // Pozn.: Assistants v2 update je POST /v1/assistants/{id}
   await api(`/v1/assistants/${assistantId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -141,7 +150,6 @@ async function cleanupOldLiveFiles(vectorStoreId, liveFilename) {
 
     let meta;
     try {
-      // /v1/files/{id} (bez beta hlavičky je OK, ale naše api() ji přidá – to nevadí)
       meta = await api(`/v1/files/${fileId}`);
     } catch {
       continue;
@@ -174,7 +182,7 @@ async function attachFileToVectorStore(vectorStoreId, fileId) {
   if (!batch?.id) throw new Error("Missing file_batch id.");
   console.log(`📦 Created file_batch: ${batch.id}`);
 
-  const timeoutMs = 240_000;
+  const timeoutMs = 180_000;
   const start = Date.now();
 
   while (true) {
@@ -186,13 +194,8 @@ async function attachFileToVectorStore(vectorStoreId, fileId) {
 
     console.log(`⏳ Indexing status: ${status}${counts ? ` | ${JSON.stringify(counts)}` : ""}`);
 
-    if (status === "completed") {
-      console.log("✅ Vector store indexing completed.");
-      return;
-    }
-    if (status === "failed" || status === "cancelled") {
-      throw new Error(`Indexing failed: ${status}`);
-    }
+    if (status === "completed") return;
+    if (status === "failed" || status === "cancelled") throw new Error(`Indexing failed: ${status}`);
 
     await sleep(2000);
   }
@@ -206,24 +209,18 @@ async function main() {
   console.log("VECTOR_STORE_ID:", VECTOR_STORE_ID);
   if (ASSISTANT_ID) console.log("ASSISTANT_ID:", ASSISTANT_ID);
 
-  // 1) Propoj assistant -> vector store (aby ho vůbec používal)
   await ensureAssistantUsesVectorStore(ASSISTANT_ID, VECTOR_STORE_ID);
 
-  // 2) Volitelně smaž staré LIVE soubory z vector store
   if (CLEANUP_OLD) {
     await cleanupOldLiveFiles(VECTOR_STORE_ID, liveFilename);
   }
 
-  // 3) Nahraj nový soubor do /v1/files
   const { fileId } = await uploadFileToOpenAI(LIVE_FILE_PATH);
-
-  // 4) Připoj file do vector store a počkej na indexing
   await attachFileToVectorStore(VECTOR_STORE_ID, fileId);
 
-  // 5) Debug výpis
   const filesNow = await listVectorStoreFiles(VECTOR_STORE_ID, 50);
-  console.log(`✅ Vector store now has ${filesNow.length} files (showing first 10):`);
-  console.log(filesNow.slice(0, 10).map((x) => `${x.id} -> file_id=${x.file_id} status=${x.status}`).join("\n"));
+  console.log(`✅ Vector store now has ${filesNow.length} files (showing first 5 ids):`);
+  console.log(filesNow.slice(0, 5).map((x) => `${x.id} -> file_id=${x.file_id}`).join("\n"));
 
   console.log("🎉 HOTOVO: LIVE data jsou ve vector store a asistent je může použít.");
 }
