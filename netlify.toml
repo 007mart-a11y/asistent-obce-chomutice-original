@@ -4,4 +4,8 @@
 
 [functions]
   directory = "netlify/functions"
-   included_files = ["public/**"]
+  included_files = ["public/**"]
+
+[[scheduled.functions]]
+  name = "live-cron"
+  schedule = "0 3 * * *"
