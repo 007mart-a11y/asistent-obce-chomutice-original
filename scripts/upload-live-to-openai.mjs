@@ -6,17 +6,22 @@
 //   VECTOR_STORE_ID=vs_...
 // Optional:
 //   ASSISTANT_ID=asst_...
-//   LIVE_FILE_PATH=knowledge/10_LIVE_obec_chomutice.txt
+//   LIVE_FILE_PATH=... (default local: knowledge/10_LIVE_obec_chomutice.txt)
 //   CLEANUP_OLD=1
 //   OPENAI_BASE_URL=https://api.openai.com
+//
+// This script is Netlify-safe:
+// - if LIVE file doesn't exist, it generates it by running scripts/live_chomutice_scrape.mjs
+// - on Netlify/serverless it writes into /tmp
 
 import fs from "fs";
 import path from "path";
+import os from "os";
+import { spawn } from "node:child_process";
 
 const cleanEnv = (v) =>
   (v || "")
     .trim()
-    // remove normal quotes + smart quotes around whole value
     .replace(/^[\s"'“”]+/, "")
     .replace(/[\s"'“”]+$/, "");
 
@@ -25,8 +30,10 @@ const VECTOR_STORE_ID = cleanEnv(process.env.VECTOR_STORE_ID);
 const ASSISTANT_ID = cleanEnv(process.env.ASSISTANT_ID);
 const OPENAI_BASE_URL = cleanEnv(process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/, "");
 
-const LIVE_FILE_PATH = cleanEnv(process.env.LIVE_FILE_PATH) || "knowledge/10_LIVE_obec_chomutice.txt";
 const CLEANUP_OLD = cleanEnv(process.env.CLEANUP_OLD) === "1";
+
+// default path people use locally
+const DEFAULT_LIVE_REL = "knowledge/10_LIVE_obec_chomutice.txt";
 
 // Assistants v2 header (nutné pro vector stores/assistants endpoints)
 const BETA_HEADERS = { "OpenAI-Beta": "assistants=v2" };
@@ -45,10 +52,7 @@ function sleep(ms) {
 }
 
 function normalizeText(s) {
-  return s
-    .replace(/[“”]/g, '"')
-    .replace(/[’]/g, "'")
-    .replace(/[–]/g, "-");
+  return s.replace(/[“”]/g, '"').replace(/[’]/g, "'").replace(/[–]/g, "-");
 }
 
 async function api(pathname, { method = "GET", headers = {}, body } = {}) {
@@ -75,17 +79,76 @@ async function api(pathname, { method = "GET", headers = {}, body } = {}) {
   return json ?? {};
 }
 
-async function uploadFileToOpenAI(filePath) {
-  const abs = path.resolve(process.cwd(), filePath);
-  if (!fs.existsSync(abs)) throw new Error(`LIVE file not found: ${abs}`);
+function runNode(scriptPath, extraEnv = {}) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, [scriptPath], {
+      stdio: "inherit",
+      env: { ...process.env, ...extraEnv },
+    });
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`node ${scriptPath} failed (${code})`))));
+  });
+}
 
-  // normalize content to avoid 8220 / smart quotes
-  let content = fs.readFileSync(abs, "utf8");
+// Decide where LIVE file should live.
+// - If user explicitly set LIVE_FILE_PATH, respect it.
+// - Otherwise: local dev -> ./knowledge/...
+// - Netlify/serverless -> /tmp/knowledge/...
+function resolveLivePath() {
+  const explicit = cleanEnv(process.env.LIVE_FILE_PATH);
+  if (explicit) return path.isAbsolute(explicit) ? explicit : path.resolve(process.cwd(), explicit);
+
+  const isServerless = !!process.env.NETLIFY || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+  if (isServerless) {
+    const tmpDir = path.join(os.tmpdir(), "knowledge");
+    return path.join(tmpDir, "10_LIVE_obec_chomutice.txt");
+  }
+
+  return path.resolve(process.cwd(), DEFAULT_LIVE_REL);
+}
+
+// Ensures LIVE file exists. If not, generate it via your scrape script.
+async function ensureLiveFileExists(liveAbsPath) {
+  if (fs.existsSync(liveAbsPath)) return;
+
+  const dir = path.dirname(liveAbsPath);
+  fs.mkdirSync(dir, { recursive: true });
+
+  console.log(`ℹ️ LIVE file not found, generating: ${liveAbsPath}`);
+
+  // We want the scrape script to write into the same folder.
+  // If your scrape script supports env var output dir, use it.
+  // If not, we still can run it by temporarily changing CWD strategy would be risky,
+  // so we pass LIVE_OUT_DIR which you can optionally read in scrape script later.
+  const liveOutDir = dir;
+
+  // IMPORTANT:
+  // Your current scrape script likely writes to "knowledge/10_LIVE_obec_chomutice.txt" relative to repo.
+  // In Netlify runtime that folder is not writable.
+  // So we MUST make scrape script write into /tmp/knowledge.
+  //
+  // If your scrape script already reads env LIVE_FILE_PATH or OUT_DIR, it will work immediately.
+  // If it doesn't, tell me and I'll patch that script too (small change).
+  await runNode(path.resolve(process.cwd(), "scripts/live_chomutice_scrape.mjs"), {
+    LIVE_FILE_PATH: liveAbsPath,
+    LIVE_OUT_DIR: liveOutDir,
+    OUT_DIR: liveOutDir,
+    KNOWLEDGE_DIR: liveOutDir,
+  });
+
+  if (!fs.existsSync(liveAbsPath)) {
+    throw new Error(`LIVE file still missing after scrape: ${liveAbsPath} (scrape script must write to LIVE_FILE_PATH/OUT_DIR)`);
+  }
+}
+
+async function uploadFileToOpenAI(absPath) {
+  if (!fs.existsSync(absPath)) throw new Error(`LIVE file not found: ${absPath}`);
+
+  let content = fs.readFileSync(absPath, "utf8");
   content = normalizeText(content);
-  fs.writeFileSync(abs, content, "utf8");
+  fs.writeFileSync(absPath, content, "utf8");
 
-  const buf = fs.readFileSync(abs);
-  const filename = path.basename(abs);
+  const buf = fs.readFileSync(absPath);
+  const filename = path.basename(absPath);
 
   const fd = new FormData();
   fd.append("purpose", "assistants");
@@ -93,9 +156,7 @@ async function uploadFileToOpenAI(filePath) {
 
   const res = await fetch(`${OPENAI_BASE_URL}/v1/files`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
     body: fd,
   });
 
@@ -202,20 +263,24 @@ async function attachFileToVectorStore(vectorStoreId, fileId) {
 }
 
 async function main() {
-  const liveFilename = path.basename(LIVE_FILE_PATH);
+  const liveAbsPath = resolveLivePath();
+  const liveFilename = path.basename(liveAbsPath);
 
   console.log("—— Upload LIVE → OpenAI Vector Store ——");
-  console.log("LIVE_FILE_PATH:", LIVE_FILE_PATH);
+  console.log("LIVE_FILE_PATH (resolved):", liveAbsPath);
   console.log("VECTOR_STORE_ID:", VECTOR_STORE_ID);
   if (ASSISTANT_ID) console.log("ASSISTANT_ID:", ASSISTANT_ID);
 
   await ensureAssistantUsesVectorStore(ASSISTANT_ID, VECTOR_STORE_ID);
 
+  // ⭐ Ensures file exists by generating it if missing
+  await ensureLiveFileExists(liveAbsPath);
+
   if (CLEANUP_OLD) {
     await cleanupOldLiveFiles(VECTOR_STORE_ID, liveFilename);
   }
 
-  const { fileId } = await uploadFileToOpenAI(LIVE_FILE_PATH);
+  const { fileId } = await uploadFileToOpenAI(liveAbsPath);
   await attachFileToVectorStore(VECTOR_STORE_ID, fileId);
 
   const filesNow = await listVectorStoreFiles(VECTOR_STORE_ID, 50);
