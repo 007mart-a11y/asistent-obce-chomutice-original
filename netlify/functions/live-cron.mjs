@@ -1,6 +1,18 @@
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 export default async function handler(req) {
   try {
-    const { spawn } = await import("node:child_process");
+    // ESM ekvivalent __dirname
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
+    // live-cron.mjs je v netlify/functions -> jdeme o 2 úrovně nahoru do rootu repa
+    const repoRoot = path.resolve(__dirname, "..", "..");
+
+    // Absolutní cesta na script
+    const scriptPath = path.join(repoRoot, "scripts", "upload-live-to-openai.mjs");
 
     const run = (cmd, args) =>
       new Promise((resolve, reject) => {
@@ -13,7 +25,7 @@ export default async function handler(req) {
       });
 
     // Spustí upload LIVE dat do OpenAI
-    await run("node", ["scripts/upload-live-to-openai.mjs"]);
+    await run("node", [scriptPath]);
 
     return new Response(
       JSON.stringify({ ok: true, message: "LIVE cron done" }),
