@@ -1,12 +1,7 @@
-import { spawn } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-export default async function handler() {
+export default async function handler(req) {
   try {
+    const { spawn } = await import("node:child_process");
+
     const run = (cmd, args) =>
       new Promise((resolve, reject) => {
         const p = spawn(cmd, args, { stdio: "inherit" });
@@ -17,25 +12,17 @@ export default async function handler() {
         );
       });
 
-    // ⬅️ ABSOLUTNÍ CESTA K SCRIPTU
-    const scriptPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "scripts",
-      "upload-live-to-openai.mjs"
-    );
-
-    await run("node", [scriptPath]);
+    // Spustí upload LIVE dat do OpenAI
+    await run("node", ["scripts/upload-live-to-openai.mjs"]);
 
     return new Response(
       JSON.stringify({ ok: true, message: "LIVE cron done" }),
-      { status: 200 }
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ ok: false, error: err.message }),
-      { status: 500 }
+      JSON.stringify({ ok: false, error: err?.message || String(err) }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }
