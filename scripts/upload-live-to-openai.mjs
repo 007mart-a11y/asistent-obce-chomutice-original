@@ -30,7 +30,9 @@ const VECTOR_STORE_ID = cleanEnv(process.env.VECTOR_STORE_ID);
 const ASSISTANT_ID = cleanEnv(process.env.ASSISTANT_ID);
 const OPENAI_BASE_URL = cleanEnv(process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/, "");
 
-const CLEANUP_OLD = cleanEnv(process.env.CLEANUP_OLD) === "1";
+// default: CLEANUP ON (spolehlivé), vypnout jde jen CLEANUP_OLD=0
+const CLEANUP_OLD = cleanEnv(process.env.CLEANUP_OLD) !== "0";
+console.log("CLEANUP_OLD:", CLEANUP_OLD ? "ON" : "OFF");
 
 // default path people use locally
 const DEFAULT_LIVE_REL = "knowledge/10_LIVE_obec_chomutice.txt";

@@ -1,47 +1,26 @@
 // scripts/live_chomutice_scrape.mjs
 // Node 18+
 // npm i cheerio
+//
+// Optional ENV:
+//   LIVE_FILE_PATH=/tmp/knowledge/10_LIVE_obec_chomutice.txt
+//
+// Default (local/build):
+//   public/knowledge/10_LIVE_obec_chomutice.txt
 
 import fs from "fs";
 import path from "path";
-import os from "os";
 import * as cheerio from "cheerio";
 
 const BASE = "https://www.obec-chomutice.cz";
 
-// --- helper: safe env
-const cleanEnv = (v) =>
-  (v || "")
-    .trim()
-    .replace(/^[\s"'“”]+/, "")
-    .replace(/[\s"'“”]+$/, "");
-
-// ---- where to write
-// Priority:
-// 1) LIVE_FILE_PATH env (absolute or relative)
-// 2) If Netlify/serverless: /tmp/knowledge/10_LIVE...
-// 3) Local dev: public/knowledge/10_LIVE...
+// ✅ resolve output path (Netlify-safe)
 function resolveOutPath() {
-  const explicit = cleanEnv(process.env.LIVE_FILE_PATH);
-  if (explicit) {
-    return path.isAbsolute(explicit)
-      ? explicit
-      : path.resolve(process.cwd(), explicit);
+  const envPath = (process.env.LIVE_FILE_PATH || "").trim();
+  if (envPath) {
+    return path.isAbsolute(envPath) ? envPath : path.join(process.cwd(), envPath);
   }
-
-  const isServerless =
-    !!process.env.NETLIFY || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-
-  if (isServerless) {
-    return path.join(os.tmpdir(), "knowledge", "10_LIVE_obec_chomutice.txt");
-  }
-
-  return path.join(
-    process.cwd(),
-    "public",
-    "knowledge",
-    "10_LIVE_obec_chomutice.txt"
-  );
+  return path.join(process.cwd(), "public", "knowledge", "10_LIVE_obec_chomutice.txt");
 }
 
 const OUT_PATH = resolveOutPath();
@@ -57,10 +36,7 @@ function nowISO() {
 
 function cleanText(str) {
   if (!str) return "";
-  return String(str)
-    .replace(/\u00A0/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(str).replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function absUrl(href) {
@@ -68,15 +44,6 @@ function absUrl(href) {
   if (href.startsWith("http")) return href;
   if (href.startsWith("/")) return BASE + href;
   return BASE + "/" + href;
-}
-
-// ✅ DŮLEŽITÉ: očistí URL o běžnou interpunkci na konci,
-// aby se z "....html." nestal 404 nebo neklikací link.
-function stripTrailingPunctuationFromUrl(url) {
-  if (!url) return "";
-  // remove trailing punctuation that often gets glued to URL in text
-  // includes: ., , ; : ) ] } ! ? and also Unicode variants
-  return String(url).replace(/[)\]}.,;:!?…]+$/g, "");
 }
 
 async function fetchHtml(url) {
@@ -102,14 +69,7 @@ function extractHomepageNotice($) {
   const keywords = /(uzavřen|uzavřena|uzavřeno|mimořádn|omezen|dovolen)/i;
 
   $("p, li").each((_, el) => {
-    const text = cleanText(
-      $(el)
-        .clone()
-        .children()
-        .remove()
-        .end()
-        .text()
-    );
+    const text = cleanText($(el).clone().children().remove().end().text());
 
     if (text && text.length > 15 && text.length < 200 && keywords.test(text)) {
       notices.push(text);
@@ -137,12 +97,7 @@ async function scrapeAktuality() {
 
     if (!title || !href) return;
 
-    items.push({
-      title,
-      date,
-      perex,
-      url: stripTrailingPunctuationFromUrl(absUrl(href)),
-    });
+    items.push({ title, date, perex, url: absUrl(href) });
   });
 
   return { url, items: items.slice(0, NEWS_LIMIT) };
@@ -166,12 +121,7 @@ async function scrapeRozhlas() {
 
     if (!title || !href) return;
 
-    items.push({
-      title,
-      date,
-      perex,
-      url: stripTrailingPunctuationFromUrl(absUrl(href)),
-    });
+    items.push({ title, date, perex, url: absUrl(href) });
   });
 
   return { url, items: items.slice(0, BROADCAST_LIMIT) };
@@ -195,12 +145,7 @@ async function scrapeKalendar() {
 
     if (!title || !href) return;
 
-    items.push({
-      title,
-      date,
-      perex,
-      url: stripTrailingPunctuationFromUrl(absUrl(href)),
-    });
+    items.push({ title, date, perex, url: absUrl(href) });
   });
 
   return { url, items: items.slice(0, EVENTS_LIMIT) };
