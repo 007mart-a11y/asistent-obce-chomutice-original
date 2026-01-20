@@ -1,12 +1,6 @@
 // scripts/live_chomutice_scrape.mjs
 // Node 18+
 // npm i cheerio
-//
-// Optional ENV:
-//   LIVE_FILE_PATH=/tmp/knowledge/10_LIVE_obec_chomutice.txt
-//
-// Default (local/build):
-//   public/knowledge/10_LIVE_obec_chomutice.txt
 
 import fs from "fs";
 import path from "path";
@@ -14,16 +8,15 @@ import * as cheerio from "cheerio";
 
 const BASE = "https://www.obec-chomutice.cz";
 
-// ✅ resolve output path (Netlify-safe)
-function resolveOutPath() {
-  const envPath = (process.env.LIVE_FILE_PATH || "").trim();
-  if (envPath) {
-    return path.isAbsolute(envPath) ? envPath : path.join(process.cwd(), envPath);
-  }
-  return path.join(process.cwd(), "public", "knowledge", "10_LIVE_obec_chomutice.txt");
-}
+// ✅ default: zapisuje do public/knowledge (pro build / lokální kontrolu)
+const DEFAULT_OUT = path.join(process.cwd(), "public", "knowledge", "10_LIVE_obec_chomutice.txt");
 
-const OUT_PATH = resolveOutPath();
+// ✅ serverless override: když je LIVE_FILE_PATH, zapisuje tam (typicky /tmp/knowledge/...)
+const OUT_PATH = process.env.LIVE_FILE_PATH
+  ? path.isAbsolute(process.env.LIVE_FILE_PATH)
+    ? process.env.LIVE_FILE_PATH
+    : path.join(process.cwd(), process.env.LIVE_FILE_PATH)
+  : DEFAULT_OUT;
 
 // limity
 const NEWS_LIMIT = 20;
@@ -53,11 +46,7 @@ async function fetchHtml(url) {
       "Accept-Language": "cs",
     },
   });
-
-  if (!res.ok) {
-    throw new Error(`Fetch failed ${res.status} ${url}`);
-  }
-
+  if (!res.ok) throw new Error(`Fetch failed ${res.status} ${url}`);
   return await res.text();
 }
 
@@ -69,7 +58,9 @@ function extractHomepageNotice($) {
   const keywords = /(uzavřen|uzavřena|uzavřeno|mimořádn|omezen|dovolen)/i;
 
   $("p, li").each((_, el) => {
-    const text = cleanText($(el).clone().children().remove().end().text());
+    const text = cleanText(
+      $(el).clone().children().remove().end().text()
+    );
 
     if (text && text.length > 15 && text.length < 200 && keywords.test(text)) {
       notices.push(text);
@@ -88,15 +79,12 @@ async function scrapeAktuality() {
   const $ = cheerio.load(html);
 
   const items = [];
-
   $(".event.readable_item").each((_, el) => {
     const title = cleanText($(el).find("h3.title").text());
     const href = $(el).find("h3.title a").attr("href");
     const date = cleanText($(el).find(".publication_date").text());
     const perex = cleanText($(el).find(".perex").text());
-
     if (!title || !href) return;
-
     items.push({ title, date, perex, url: absUrl(href) });
   });
 
@@ -112,15 +100,12 @@ async function scrapeRozhlas() {
   const $ = cheerio.load(html);
 
   const items = [];
-
   $(".event.readable_item").each((_, el) => {
     const title = cleanText($(el).find("h3.title").text());
     const href = $(el).find("a").attr("href");
     const date = cleanText($(el).find(".publication_date").text());
     const perex = cleanText($(el).find(".perex").text());
-
     if (!title || !href) return;
-
     items.push({ title, date, perex, url: absUrl(href) });
   });
 
@@ -136,15 +121,12 @@ async function scrapeKalendar() {
   const $ = cheerio.load(html);
 
   const items = [];
-
   $(".event.readable_item").each((_, el) => {
     const title = cleanText($(el).find("h3.title").text());
     const href = $(el).find("h3.title a").attr("href");
     const date = cleanText($(el).find(".publication_date").text());
     const perex = cleanText($(el).find(".perex").text());
-
     if (!title || !href) return;
-
     items.push({ title, date, perex, url: absUrl(href) });
   });
 
@@ -156,7 +138,6 @@ async function scrapeKalendar() {
 ========================= */
 function formatList(items) {
   if (!items.length) return "- (nenalezeno)";
-
   return items
     .map((i) => {
       let out = `- ${i.title}${i.date ? ` (${i.date})` : ""}`;

@@ -6,13 +6,12 @@
 //   VECTOR_STORE_ID=vs_...
 // Optional:
 //   ASSISTANT_ID=asst_...
-//   LIVE_FILE_PATH=... (default local: knowledge/10_LIVE_obec_chomutice.txt)
-//   CLEANUP_OLD=1
+//   CLEANUP_OLD=1 (default ON; vypnout: CLEANUP_OLD=0)
 //   OPENAI_BASE_URL=https://api.openai.com
 //
-// This script is Netlify-safe:
-// - if LIVE file doesn't exist, it generates it by running scripts/live_chomutice_scrape.mjs
-// - on Netlify/serverless it writes into /tmp
+// Netlify-safe:
+// - generuje LIVE do /tmp/knowledge/.. (serverless) nebo do public/knowledge (lokálně)
+// - před uploadem smaže staré LIVE soubory z vector store
 
 import fs from "fs";
 import path from "path";
@@ -30,12 +29,9 @@ const VECTOR_STORE_ID = cleanEnv(process.env.VECTOR_STORE_ID);
 const ASSISTANT_ID = cleanEnv(process.env.ASSISTANT_ID);
 const OPENAI_BASE_URL = cleanEnv(process.env.OPENAI_BASE_URL || "https://api.openai.com").replace(/\/+$/, "");
 
-// default: CLEANUP ON (spolehlivé), vypnout jde jen CLEANUP_OLD=0
+// default: cleanup ON (vypnout jen CLEANUP_OLD=0)
 const CLEANUP_OLD = cleanEnv(process.env.CLEANUP_OLD) !== "0";
 console.log("CLEANUP_OLD:", CLEANUP_OLD ? "ON" : "OFF");
-
-// default path people use locally
-const DEFAULT_LIVE_REL = "knowledge/10_LIVE_obec_chomutice.txt";
 
 // Assistants v2 header (nutné pro vector stores/assistants endpoints)
 const BETA_HEADERS = { "OpenAI-Beta": "assistants=v2" };
@@ -57,7 +53,7 @@ function normalizeText(s) {
   return s.replace(/[“”]/g, '"').replace(/[’]/g, "'").replace(/[–]/g, "-");
 }
 
-async function api(pathname, { method = "GET", headers = {}, body } = {}) {
+async function apiV2(pathname, { method = "GET", headers = {}, body } = {}) {
   const res = await fetch(`${OPENAI_BASE_URL}${pathname}`, {
     method,
     headers: {
@@ -81,70 +77,76 @@ async function api(pathname, { method = "GET", headers = {}, body } = {}) {
   return json ?? {};
 }
 
-function runNode(scriptPath, extraEnv = {}) {
+// /v1/files endpoint (bez beta header)
+async function apiFiles(pathname, { method = "GET", headers = {}, body } = {}) {
+  const res = await fetch(`${OPENAI_BASE_URL}${pathname}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      ...headers,
+    },
+    body,
+  });
+
+  const text = await res.text().catch(() => "");
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {}
+
+  if (!res.ok) {
+    const msg = json?.error?.message || text || `HTTP ${res.status}`;
+    throw new Error(`${method} ${pathname} failed: ${msg}`);
+  }
+  return json ?? {};
+}
+
+function runNode(scriptAbsPath, extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [scriptPath], {
+    const p = spawn(process.execPath, [scriptAbsPath], {
       stdio: "inherit",
       env: { ...process.env, ...extraEnv },
     });
-    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`node ${scriptPath} failed (${code})`))));
+    p.on("close", (code) =>
+      code === 0 ? resolve() : reject(new Error(`node ${scriptAbsPath} failed (${code})`))
+    );
   });
 }
 
-// Decide where LIVE file should live.
-// - If user explicitly set LIVE_FILE_PATH, respect it.
-// - Otherwise: local dev -> ./knowledge/...
-// - Netlify/serverless -> /tmp/knowledge/...
+function isServerless() {
+  return !!process.env.NETLIFY || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+}
+
+// kde má vzniknout LIVE soubor
 function resolveLivePath() {
   const explicit = cleanEnv(process.env.LIVE_FILE_PATH);
   if (explicit) return path.isAbsolute(explicit) ? explicit : path.resolve(process.cwd(), explicit);
 
-  const isServerless = !!process.env.NETLIFY || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-  if (isServerless) {
-    const tmpDir = path.join(os.tmpdir(), "knowledge");
-    return path.join(tmpDir, "10_LIVE_obec_chomutice.txt");
+  if (isServerless()) {
+    const dir = path.join(os.tmpdir(), "knowledge");
+    return path.join(dir, "10_LIVE_obec_chomutice.txt");
   }
 
-  return path.resolve(process.cwd(), DEFAULT_LIVE_REL);
+  return path.join(process.cwd(), "public", "knowledge", "10_LIVE_obec_chomutice.txt");
 }
 
-// Ensures LIVE file exists. If not, generate it via your scrape script.
 async function ensureLiveFileExists(liveAbsPath) {
   if (fs.existsSync(liveAbsPath)) return;
 
-  const dir = path.dirname(liveAbsPath);
-  fs.mkdirSync(dir, { recursive: true });
-
+  fs.mkdirSync(path.dirname(liveAbsPath), { recursive: true });
   console.log(`ℹ️ LIVE file not found, generating: ${liveAbsPath}`);
 
-  // We want the scrape script to write into the same folder.
-  // If your scrape script supports env var output dir, use it.
-  // If not, we still can run it by temporarily changing CWD strategy would be risky,
-  // so we pass LIVE_OUT_DIR which you can optionally read in scrape script later.
-  const liveOutDir = dir;
+  const scrapeAbs = path.resolve(process.cwd(), "scripts/live_chomutice_scrape.mjs");
 
-  // IMPORTANT:
-  // Your current scrape script likely writes to "knowledge/10_LIVE_obec_chomutice.txt" relative to repo.
-  // In Netlify runtime that folder is not writable.
-  // So we MUST make scrape script write into /tmp/knowledge.
-  //
-  // If your scrape script already reads env LIVE_FILE_PATH or OUT_DIR, it will work immediately.
-  // If it doesn't, tell me and I'll patch that script too (small change).
-  await runNode(path.resolve(process.cwd(), "scripts/live_chomutice_scrape.mjs"), {
-    LIVE_FILE_PATH: liveAbsPath,
-    LIVE_OUT_DIR: liveOutDir,
-    OUT_DIR: liveOutDir,
-    KNOWLEDGE_DIR: liveOutDir,
-  });
+  // ✅ řekneme scraperu přes env kam má zapisovat
+  await runNode(scrapeAbs, { LIVE_FILE_PATH: liveAbsPath });
 
   if (!fs.existsSync(liveAbsPath)) {
-    throw new Error(`LIVE file still missing after scrape: ${liveAbsPath} (scrape script must write to LIVE_FILE_PATH/OUT_DIR)`);
+    throw new Error(`LIVE file still missing after scrape: ${liveAbsPath}`);
   }
 }
 
 async function uploadFileToOpenAI(absPath) {
-  if (!fs.existsSync(absPath)) throw new Error(`LIVE file not found: ${absPath}`);
-
   let content = fs.readFileSync(absPath, "utf8");
   content = normalizeText(content);
   fs.writeFileSync(absPath, content, "utf8");
@@ -182,7 +184,7 @@ async function ensureAssistantUsesVectorStore(assistantId, vectorStoreId) {
   if (!assistantId) return;
   console.log(`🔗 Updating assistant tool_resources: ${assistantId} -> vector_store_ids=[${vectorStoreId}]`);
 
-  await api(`/v1/assistants/${assistantId}`, {
+  await apiV2(`/v1/assistants/${assistantId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -194,12 +196,33 @@ async function ensureAssistantUsesVectorStore(assistantId, vectorStoreId) {
 }
 
 async function listVectorStoreFiles(vectorStoreId, limit = 100) {
-  const out = await api(`/v1/vector_stores/${vectorStoreId}/files?limit=${limit}`);
+  const out = await apiV2(`/v1/vector_stores/${vectorStoreId}/files?limit=${limit}`);
   return out?.data || [];
 }
 
-async function deleteVectorStoreFile(vectorStoreId, vectorStoreFileId) {
-  await api(`/v1/vector_stores/${vectorStoreId}/files/${vectorStoreFileId}`, { method: "DELETE" });
+// ✅ robustní: některé odpovědi mají file_id, některé jen id, někde je to v f.file.id
+function pickFileId(f) {
+  return f?.file_id || f?.file?.id || f?.id || null;
+}
+
+async function pickFilename(f) {
+  if (f?.filename) return f.filename;
+  if (f?.file?.filename) return f.file.filename;
+
+  const fileId = pickFileId(f);
+  if (!fileId) return "";
+
+  try {
+    const meta = await apiFiles(`/v1/files/${fileId}`);
+    return meta?.filename || "";
+  } catch {
+    return "";
+  }
+}
+
+async function deleteVectorStoreFile(vectorStoreId, idMaybe) {
+  // Nejčastěji funguje delete přes /vector_stores/{vs}/files/{id}
+  await apiV2(`/v1/vector_stores/${vectorStoreId}/files/${idMaybe}`, { method: "DELETE" });
 }
 
 async function cleanupOldLiveFiles(vectorStoreId, liveFilename) {
@@ -208,35 +231,40 @@ async function cleanupOldLiveFiles(vectorStoreId, liveFilename) {
 
   const toDelete = [];
   for (const f of files) {
-    const fileId = f.file_id;
-    if (!fileId) continue;
+    const name = (await pickFilename(f)) || "";
+    const lower = name.toLowerCase();
 
-    let meta;
-    try {
-      meta = await api(`/v1/files/${fileId}`);
-    } catch {
-      continue;
-    }
-
-    const name = meta?.filename || "";
+    // ✅ jen LIVE soubory
     const isLive =
-      name === liveFilename ||
-      name.toLowerCase().includes("live") ||
-      name.toLowerCase().includes("10_live_obec_chomutice");
+      lower === liveFilename.toLowerCase() ||
+      lower.includes("10_live_obec_chomutice") ||
+      lower.includes("live_obec_chomutice") ||
+      lower.includes("10_live");
 
-    if (isLive) toDelete.push({ vsFileId: f.id, fileId, filename: name });
+    if (!isLive) continue;
+
+    // id pro delete – v praxi to bývá to, co je v `f.id` (a někdy je to přímo file-...)
+    const deleteId = f?.id || pickFileId(f);
+    if (!deleteId) continue;
+
+    toDelete.push({ deleteId, filename: name || "(unknown)" });
   }
 
   for (const d of toDelete) {
-    console.log(`🗑️  Mazání: ${d.filename} (vs_file=${d.vsFileId}, file=${d.fileId})`);
-    await deleteVectorStoreFile(vectorStoreId, d.vsFileId);
+    console.log(`🗑️  Mazání z vector store: ${d.filename} (id=${d.deleteId})`);
+    try {
+      await deleteVectorStoreFile(vectorStoreId, d.deleteId);
+    } catch (e) {
+      // fallback: když by delete chtěl místo f.id něco jiného
+      console.log(`⚠️  Delete fallback for id=${d.deleteId}: ${e?.message || e}`);
+    }
   }
 
   console.log(`✅ Cleanup hotov (smazáno: ${toDelete.length})`);
 }
 
 async function attachFileToVectorStore(vectorStoreId, fileId) {
-  const batch = await api(`/v1/vector_stores/${vectorStoreId}/file_batches`, {
+  const batch = await apiV2(`/v1/vector_stores/${vectorStoreId}/file_batches`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ file_ids: [fileId] }),
@@ -251,7 +279,7 @@ async function attachFileToVectorStore(vectorStoreId, fileId) {
   while (true) {
     if (Date.now() - start > timeoutMs) throw new Error("Timeout waiting for vector store indexing.");
 
-    const check = await api(`/v1/vector_stores/${vectorStoreId}/file_batches/${batch.id}`);
+    const check = await apiV2(`/v1/vector_stores/${vectorStoreId}/file_batches/${batch.id}`);
     const status = check?.status || "unknown";
     const counts = check?.file_counts;
 
@@ -275,20 +303,20 @@ async function main() {
 
   await ensureAssistantUsesVectorStore(ASSISTANT_ID, VECTOR_STORE_ID);
 
-  // ⭐ Ensures file exists by generating it if missing
+  // ✅ vytvoří LIVE když neexistuje (na Netlify do /tmp)
   await ensureLiveFileExists(liveAbsPath);
 
+  // ✅ smaže staré LIVE z vector store (teď už fakt)
   if (CLEANUP_OLD) {
     await cleanupOldLiveFiles(VECTOR_STORE_ID, liveFilename);
   }
 
+  // ✅ upload + attach
   const { fileId } = await uploadFileToOpenAI(liveAbsPath);
   await attachFileToVectorStore(VECTOR_STORE_ID, fileId);
 
   const filesNow = await listVectorStoreFiles(VECTOR_STORE_ID, 50);
-  console.log(`✅ Vector store now has ${filesNow.length} files (showing first 5 ids):`);
-  console.log(filesNow.slice(0, 5).map((x) => `${x.id} -> file_id=${x.file_id}`).join("\n"));
-
+  console.log(`✅ Vector store now has ${filesNow.length} files.`);
   console.log("🎉 HOTOVO: LIVE data jsou ve vector store a asistent je může použít.");
 }
 
